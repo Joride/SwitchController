@@ -8,11 +8,8 @@ kBeginOfMessage  = 0b10000000
 kEndOfMessage    = 0b11000000
 
 def handleMessage(message, fileLikeObject):
-    print "handleMessage"
     for byte in message:
         print "byte: ", ord(byte)
-
-    print "-- end of message --"
 
     if ord(message[1]) == 0b00000001:
         # turn on the lights
@@ -25,7 +22,6 @@ def handleMessage(message, fileLikeObject):
         call(['gpio','write', 'X', '0'])
 
 def listenForBytes(connection, mock):
-    print "listenForBytes"
     fileLikeObject = connection.makefile('sb')
 
     while True:
