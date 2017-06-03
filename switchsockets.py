@@ -1,25 +1,84 @@
 import socket
 from Queue import Queue
 from threading import Thread
-from subprocess import call
 import struct
+import subprocess
+
+kPortNumber = 103
 
 kBeginOfMessage  = 0b10000000
 kEndOfMessage    = 0b11000000
+kClientRequestStatusMessage = 0b00000000
+
+# The least significant 4 bits indicate the
+# values to be set on the switches:
+# example: switch 1 on: 0b00010001
+# example: switch 3 on: 0b00010100
+# example: switch 2 and 4 on: 0b00011010
+kClientModifyStatusMessage = 0b00010000
+
+connections = []
 
 def handleMessage(message, fileLikeObject):
+    print "Message received: %s" % message
     for byte in message:
-        print "byte: ", ord(byte)
+        print ""
 
-    if ord(message[1]) == 0b00000001:
-        # turn on the lights
-        print "LIGHTS ON"
-        call(['gpio','write', '0', '1'])
+    if (ord(message[0]) & kClientRequestStatusMessage) == kClientRequestStatusMessage:
+        print "Client requested status"
 
-    if ord(message[1]) == 0b00000000:
-        # turn off the lights
-        print "LIGHTS OFF"
-        call(['gpio','write', 'X', '0'])
+        message = constructStatusMessage()
+        sendMessage(connection, message)
+
+    if (ord(message[0]) & kClientModifyStatusMessage) == kClientModifyStatusMessage:
+        print "Client Requests Modification"
+
+        for index in range(0, 5):
+            mask = 0b00000001 << index
+            bitValue = ord(message[0]) & mask
+            switchIndexString = "%s" % (index)
+            bitValueString = "%s" % bitValue
+
+            print "setting switch %s to value %s" % (switchIndexString, bitValueString)
+
+            call(['gpio','write', switchIndexString, bitValueString])
+
+        sendStatusToAllConnections()
+
+def constructStatusMessage():
+    status = pinStatus()
+    message = [kBeginOfMessage]
+    message.append(status)
+    message.append(kEndOfMessage)
+
+    return message
+
+def sendStatusToAllConnections():
+    for aConnection in connections:
+        bytes = constructStatusMessage()
+        sendMessage(aConnection, bytes)
+
+def sendMessage(connection = None, bytes = []):
+    typeList = ''
+    for index in range (0, len(bytes)):
+        if index == 0:
+            typeList += "B"
+        else:
+            typeList += " B"
+
+    packer = struct.Struct(typeList)
+    packed_data = packer.pack(*bytes)
+    sent = connection.sendall(packed_data)
+
+def pinStatus():
+    switchesValue = 0
+    for index in range(0, 4):
+        switchIndexStr = "%s" % index
+        switchValue = subprocess.check_output(['gpio','read', switchIndexStr])
+        bitShiftedValue = (int(switchValue) << index)
+        switchesValue |=  bitShiftedValue
+
+    return switchesValue
 
 def listenForBytes(connection, mock):
     fileLikeObject = connection.makefile('sb')
@@ -37,6 +96,7 @@ def listenForBytes(connection, mock):
             try:
                 connection.shutdown(2)
                 connection.close
+                connections.remove(connection)
             except Exception as instance:
                 # print type(instance)    # the exception instance
                 # print instance.args     # arguments stored in .args
@@ -48,13 +108,15 @@ def listenForBytes(connection, mock):
         else:
             # in this for loop, an array of bytes is build
             # that contains a message (by selecting out a pattern)
+            currentMessage = []
             for byte in data:
                 binaryByte  = ord(byte)
                 if binaryByte == kBeginOfMessage:
-                    currentMessage = byte
+                    # currentMessage = byte
+                    print("")
 
                 elif binaryByte == kEndOfMessage:
-                    currentMessage += byte
+                    # currentMessage += byte
                     handleMessage(currentMessage, fileLikeObject)
                     currentMessage = []
 
@@ -74,16 +136,16 @@ def listenForBytes(connection, mock):
 ##
 
 ## prepare the GPIO pins
-call(['gpio','mode', '0', 'out'])
-call(['gpio','mode', '1', 'out'])
-call(['gpio','mode', '2', 'out'])
-call(['gpio','mode', '3', 'out'])
+subprocess.call(['gpio','mode', '0', 'out'])
+subprocess.call(['gpio','mode', '1', 'out'])
+subprocess.call(['gpio','mode', '2', 'out'])
+subprocess.call(['gpio','mode', '3', 'out'])
 
 # setup a socket to listen on port 82
 try:
     socket = socket.socket()
     host = ""
-    port = 84
+    port = kPortNumber
     socket.bind((host, port))
     socket.listen(port)
     print "socket set up"
@@ -96,24 +158,18 @@ except Exception as instance:
 while True:
     try:
         connection, addr = socket.accept()
+        connections.append(connection)
+        print "Got connection fom %s %s" % (connection, addr)
         worker = Thread(target=listenForBytes, args=(connection, None))
         worker.setDaemon(True)
         worker.start()
 
-        pin0Value = call(['gpio','read', '0'])
+        message = constructStatusMessage()
+        sendMessage(connection, message)
 
-        print "pin0Value %s" % pin0Value
-
-        values = (kBeginOfMessage, pin0Value, kEndOfMessage)
-        packer = struct.Struct('B B B')
-        packed_data = packer.pack(*values)
-
-        sent = connection.sendall(packed_data)
-
-        print "Got connection fom %s %s" % (connection, addr)
 
     except ValueError:
-        print "ERROR IN MAIN WHILE LOOP: ", ValueError
+        print "ERROR IN MAIN WHILE-LOOP: ", ValueError
         print "Now shutting down socket and closing it."
 
         # The constants SHUT_RD, SHUT_WR, SHUT_RDWR have the values 0, 1, 2,
