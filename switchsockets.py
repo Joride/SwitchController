@@ -21,16 +21,17 @@ connections = []
 
 def handleMessage(message, fileLikeObject):
     print "Message received: %s" % message
+
     for byte in message:
         print ""
 
-    if (ord(message[0]) & kClientRequestStatusMessage) == kClientRequestStatusMessage:
+    if (message[0] & kClientRequestStatusMessage) == kClientRequestStatusMessage:
         print "Client requested status"
 
         message = constructStatusMessage()
         sendMessage(connection, message)
 
-    if (ord(message[0]) & kClientModifyStatusMessage) == kClientModifyStatusMessage:
+    if (message[0] & kClientModifyStatusMessage) == kClientModifyStatusMessage:
         print "Client Requests Modification"
 
         for index in range(0, 5):
