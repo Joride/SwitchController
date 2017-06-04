@@ -4,45 +4,47 @@ from threading import Thread
 import struct
 import subprocess
 
-kPortNumber = 103
+kPortNumber = 82
 
 kBeginOfMessage  = 0b10000000
 kEndOfMessage    = 0b11000000
-kClientRequestStatusMessage = 0b00000000
+kClientRequestStatusMessage = 0b00100000
 
 # The least significant 4 bits indicate the
 # values to be set on the switches:
 # example: switch 1 on: 0b00010001
 # example: switch 3 on: 0b00010100
 # example: switch 2 and 4 on: 0b00011010
-kClientModifyStatusMessage = 0b00010000
+kClientModifyStatusMessage = 0b01000000
 
 connections = []
 
 def handleMessage(message, fileLikeObject):
-    print "Message received: %s" % message
+    print "Message received:"
 
     for byte in message:
-        print ""
+        print format(byte, '08b')
 
-    if (message[0] & kClientRequestStatusMessage) == kClientRequestStatusMessage:
+    messageByte = message[0]
+
+    if (messageByte & kClientRequestStatusMessage) == kClientRequestStatusMessage:
         print "Client requested status"
 
         message = constructStatusMessage()
         sendMessage(connection, message)
 
-    if (message[0] & kClientModifyStatusMessage) == kClientModifyStatusMessage:
+    if (messageByte & kClientModifyStatusMessage) == kClientModifyStatusMessage:
         print "Client Requests Modification"
 
-        for index in range(0, 5):
-            mask = 0b00000001 << index
-            bitValue = ord(message[0]) & mask
-            switchIndexString = "%s" % (index)
+        for index in range(0, 4):
+            mask = 1 << index
+            bitValue = 1 if ((message[0] & mask) == mask) else 0
             bitValueString = "%s" % bitValue
+            indexString = "%s" % index
 
-            print "setting switch %s to value %s" % (switchIndexString, bitValueString)
+            print "setting switch %s to value %s" % (indexString, bitValueString)
 
-            call(['gpio','write', switchIndexString, bitValueString])
+            subprocess.call(['gpio','write', indexString, bitValueString])
 
         sendStatusToAllConnections()
 
@@ -72,7 +74,7 @@ def sendMessage(connection = None, bytes = []):
     sent = connection.sendall(packed_data)
 
 def pinStatus():
-    switchesValue = 0
+    switchesValue = kClientRequestStatusMessage
     for index in range(0, 4):
         switchIndexStr = "%s" % index
         switchValue = subprocess.check_output(['gpio','read', switchIndexStr])
@@ -123,7 +125,7 @@ def listenForBytes(connection, mock):
 
                 else:
                     if currentMessage !=  None:
-                        currentMessage += byte
+                        currentMessage.append(binaryByte)
                     else:
                         print "Programming error: trying to appent a byte to the currentMessage, but there is no currentmessage yet."
 
@@ -167,7 +169,6 @@ while True:
 
         message = constructStatusMessage()
         sendMessage(connection, message)
-
 
     except ValueError:
         print "ERROR IN MAIN WHILE-LOOP: ", ValueError
