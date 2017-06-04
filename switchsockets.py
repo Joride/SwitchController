@@ -42,7 +42,7 @@ def handleMessage(message, fileLikeObject):
             bitValueString = "%s" % bitValue
             indexString = "%s" % index
 
-            print "setting switch %s to value %s" % (indexString, bitValueString)
+            #print "setting switch %s to value %s" % (indexString, bitValueString)
 
             subprocess.call(['gpio','write', indexString, bitValueString])
 
