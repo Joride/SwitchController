@@ -6,16 +6,27 @@ import subprocess
 
 kPortNumber = 82
 
+
+ #             |   set/req     command  |
+ # beginOfMes  |   0b0000      0000     |   endOfMessage
+ # ------------|------------------------|-------------
+ # 0b1000 0000 |   0b0001      1100     |   0b1100 0000  // set switch 4 to 1
+ # 0b1000 0000 |   0b0001      0011     |   0b1100 0000  // set switch 3 to 0
+ # 0b1000 0000 |   0b0001      1011     |   0b1100 0000  // set switch 3 to 1
+ # 0b1000 0000 |   0b0001      1001     |   0b1100 0000  // set switch 1 to 1
+ # 0b1000 0000 |   0b0001      1000     |   0b1100 0000  // set switch 0 to 1
+ # 0b1000 0000 |   0b0011      0000     |   0b1100 0000  // request status
+
 kBeginOfMessage  = 0b10000000
 kEndOfMessage    = 0b11000000
-kClientRequestStatusMessage = 0b00100000
+kClientRequestStatusMessage = 0b00110000
 
 # The least significant 4 bits indicate the
 # values to be set on the switches:
 # example: switch 1 on: 0b00010001
 # example: switch 3 on: 0b00010100
 # example: switch 2 and 4 on: 0b00011010
-kClientModifyStatusMessage = 0b01000000
+kClientModifyStatusMessage = 0b00010000
 
 connections = []
 
@@ -36,15 +47,16 @@ def handleMessage(message, fileLikeObject):
     if (messageByte & kClientModifyStatusMessage) == kClientModifyStatusMessage:
         print "Client Requests Modification"
 
-        for index in range(0, 4):
-            mask = 1 << index
-            bitValue = 1 if ((message[0] & mask) == mask) else 0
-            bitValueString = "%s" % bitValue
-            indexString = "%s" % index
+        valueMask = 0b00001000 # why? see the examples earlier in this file
+        value = (valueMask & messageByte) >> 3
+        valueString = "%s" % value
 
-            #print "setting switch %s to value %s" % (indexString, bitValueString)
+        indexMask = 0b00000111
+        indexOfSwitch = messageByte & indexMask
+        indexString = "%s" % indexOfSwitch
 
-            subprocess.call(['gpio','write', indexString, bitValueString])
+        print "index: %s; value: %s" % (indexString, valueString)
+        subprocess.call(['gpio','write', indexString, valueString])
 
         sendStatusToAllConnections()
 
