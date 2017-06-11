@@ -70,6 +70,7 @@ def constructStatusMessage():
     return message
 
 def sendStatusToAllConnections():
+    print "connections: %s" %  connections
     for aConnection in connections:
         bytes = constructStatusMessage()
         sendMessage(aConnection, bytes)
@@ -103,14 +104,14 @@ def pinStatus():
 
 def closeAndRemoveConnection(connection):
     try:
+        connections.remove(connection)
         connection.shutdown(2)
         connection.close
-        connections.remove(connection)
     except Exception as instance:
         # print type(instance)    # the exception instance
         # print instance.args     # arguments stored in .args
         # print instance          # __str__ logs args to be printed directly
-        print "Unable to close a connection that returns not more data: %s" % (instance,)
+        print "Unable to close a connection that returns no more data: %s" % (instance,)
 
 def listenForBytes(connection, mock):
     fileLikeObject = connection.makefile('sb')
