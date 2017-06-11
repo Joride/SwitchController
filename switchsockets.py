@@ -3,6 +3,7 @@ from Queue import Queue
 from threading import Thread
 import struct
 import subprocess
+import errno
 
 kPortNumber = 82
 
@@ -74,6 +75,7 @@ def sendStatusToAllConnections():
         sendMessage(aConnection, bytes)
 
 def sendMessage(connection = None, bytes = []):
+    print "sendMessage: %s to: %s" % (bytes, connection)
     typeList = ''
     for index in range (0, len(bytes)):
         if index == 0:
@@ -83,7 +85,11 @@ def sendMessage(connection = None, bytes = []):
 
     packer = struct.Struct(typeList)
     packed_data = packer.pack(*bytes)
-    sent = connection.sendall(packed_data)
+    try:
+        sent = connection.sendall(packed_data)
+    except Exception as e:
+        print "Exception while trying to send data: %s" % e
+        closeAndRemoveConnection(connection)
 
 def pinStatus():
     switchesValue = kClientRequestStatusMessage
@@ -95,11 +101,28 @@ def pinStatus():
 
     return switchesValue
 
+def closeAndRemoveConnection(connection):
+    try:
+        connection.shutdown(2)
+        connection.close
+        connections.remove(connection)
+    except Exception as instance:
+        # print type(instance)    # the exception instance
+        # print instance.args     # arguments stored in .args
+        # print instance          # __str__ logs args to be printed directly
+        print "Unable to close a connection that returns not more data: %s" % (instance,)
+
 def listenForBytes(connection, mock):
     fileLikeObject = connection.makefile('sb')
 
     while True:
-        data = connection.recv(1024)
+        try:
+            data = connection.recv(1024)
+        except Exception as e:
+            print "Exception while trying to receive data: %s" % e
+            closeAndRemoveConnection(connection)
+            break
+
         currentMessage = None
 
         if not data:
@@ -108,16 +131,7 @@ def listenForBytes(connection, mock):
             # maybe the connection did not actually disconnect
             # so we make sure it really is disconnected and in
             # this way the client knows we shut down
-            try:
-                connection.shutdown(2)
-                connection.close
-                connections.remove(connection)
-            except Exception as instance:
-                # print type(instance)    # the exception instance
-                # print instance.args     # arguments stored in .args
-                # print instance          # __str__ logs args to be printed directly
-                print "Unable to close a connection that returns not more data: %s" % (instance,)
-
+            closeAndRemoveConnection(connection)
             break
 
         else:
