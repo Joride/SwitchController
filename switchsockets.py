@@ -5,6 +5,7 @@ import struct
 import subprocess
 import errno
 
+
 kPortNumber = 82
 
 
@@ -32,21 +33,21 @@ kClientModifyStatusMessage = 0b00010000
 connections = []
 
 def handleMessage(message, fileLikeObject):
-    print "Message received:"
+    log("Message received:")
 
     for byte in message:
-        print format(byte, '08b')
+        log(format(byte, '08b'))
 
     messageByte = message[0]
 
     if (messageByte & kClientRequestStatusMessage) == kClientRequestStatusMessage:
-        print "Client requested status"
+        log("Client requested status")
 
         message = constructStatusMessage()
         sendMessage(connection, message)
 
     if (messageByte & kClientModifyStatusMessage) == kClientModifyStatusMessage:
-        print "Client Requests Modification"
+        log("Client Requests Modification")
 
         valueMask = 0b00001000 # why? see the examples earlier in this file
         value = (valueMask & messageByte) >> 3
@@ -56,7 +57,7 @@ def handleMessage(message, fileLikeObject):
         indexOfSwitch = messageByte & indexMask
         indexString = "%s" % indexOfSwitch
 
-        print "index: %s; value: %s" % (indexString, valueString)
+        log("index: %s; value: %s" % (indexString, valueString))
         subprocess.call(['gpio','write', indexString, valueString])
 
         sendStatusToAllConnections()
@@ -70,13 +71,13 @@ def constructStatusMessage():
     return message
 
 def sendStatusToAllConnections():
-    print "connections: %s" %  connections
+    log("connections: %s" %  connections)
     for aConnection in connections:
         bytes = constructStatusMessage()
         sendMessage(aConnection, bytes)
 
 def sendMessage(connection = None, bytes = []):
-    print "sendMessage: %s to: %s" % (bytes, connection)
+    log("sendMessage: %s to: %s" % (bytes, connection))
     typeList = ''
     for index in range (0, len(bytes)):
         if index == 0:
@@ -89,7 +90,7 @@ def sendMessage(connection = None, bytes = []):
     try:
         sent = connection.sendall(packed_data)
     except Exception as e:
-        print "Exception while trying to send data: %s" % e
+        log("Exception while trying to send data: %s" % e)
         closeAndRemoveConnection(connection)
 
 def pinStatus():
@@ -108,10 +109,10 @@ def closeAndRemoveConnection(connection):
         connection.shutdown(2)
         connection.close
     except Exception as instance:
-        # print type(instance)    # the exception instance
-        # print instance.args     # arguments stored in .args
-        # print instance          # __str__ logs args to be printed directly
-        print "Unable to close a connection that returns no more data: %s" % (instance,)
+        # log( type(instance)    # the exception instance
+        # log( instance.args     # arguments stored in .args
+        # log( instance          # __str__ logs args to be log(ed directly
+        log("Unable to close a connection that returns no more data: %s" % (instance,))
 
 def listenForBytes(connection, mock):
     fileLikeObject = connection.makefile('sb')
@@ -120,14 +121,14 @@ def listenForBytes(connection, mock):
         try:
             data = connection.recv(1024)
         except Exception as e:
-            print "Exception while trying to receive data: %s" % e
+            log("Exception while trying to receive data: %s" % e)
             closeAndRemoveConnection(connection)
             break
 
         currentMessage = None
 
         if not data:
-            print "%s has no more data, now considering it disconnected and closing the connection""" % (connection,)
+            log("%s has no more data, now considering it disconnected and closing the connection""" % (connection,))
 
             # maybe the connection did not actually disconnect
             # so we make sure it really is disconnected and in
@@ -143,7 +144,7 @@ def listenForBytes(connection, mock):
                 binaryByte  = ord(byte)
                 if binaryByte == kBeginOfMessage:
                     # currentMessage = byte
-                    print("")
+                    log("")
 
                 elif binaryByte == kEndOfMessage:
                     # currentMessage += byte
@@ -154,10 +155,13 @@ def listenForBytes(connection, mock):
                     if currentMessage !=  None:
                         currentMessage.append(binaryByte)
                     else:
-                        print "Programming error: trying to appent a byte to the currentMessage, but there is no currentmessage yet."
+                        log("Programming error: trying to appent a byte to the currentMessage, but there is no currentmessage yet.")
 
 
 
+def log(message = ""):
+    with open("/var/log/switchsockets.log", "a") as aFile:
+        aFile.write(message + "\n")
 
 
 
@@ -180,7 +184,7 @@ try:
     socket.listen(port)
     print "socket set up"
 except Exception as instance:
-    print "Unable to setup a listening socket: %s" % (instance,)
+    print  "Unable to setup a listening socket: %s" % (instance,)
     exit("1")
 
 
@@ -189,7 +193,7 @@ while True:
     try:
         connection, addr = socket.accept()
         connections.append(connection)
-        print "Got connection fom %s %s" % (connection, addr)
+        log("Got connection fom %s %s" % (connection, addr))
         worker = Thread(target=listenForBytes, args=(connection, None))
         worker.setDaemon(True)
         worker.start()
@@ -198,8 +202,8 @@ while True:
         sendMessage(connection, message)
 
     except ValueError:
-        print "ERROR IN MAIN WHILE-LOOP: ", ValueError
-        print "Now shutting down socket and closing it."
+        log("ERROR IN MAIN WHILE-LOOP: ", ValueError)
+        log("Now shutting down socket and closing it.")
 
         # The constants SHUT_RD, SHUT_WR, SHUT_RDWR have the values 0, 1, 2,
         # respectively, and are defined in <sys/socket.h> since glibc-2.1.91.
